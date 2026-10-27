@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { RotateCcw, Trash2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { AUTH_STORAGE_KEY, supabase } from '@/lib/supabase'
 import { resetDevice } from '@/lib/storage'
 
 type State = { error: Error | null; attempt: number }
@@ -24,7 +24,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     } catch {
       /* ignore */
     }
-    await resetDevice()
+    await resetDevice(AUTH_STORAGE_KEY)
     window.location.reload()
   }
 

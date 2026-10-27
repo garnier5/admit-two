@@ -17,11 +17,10 @@ function Splash({ text }: { text: string }) {
   )
 }
 
+/** Déconnecte uniquement cet appareil et cette app (la portée « global » déconnecterait aussi Mealer partout). */
 async function signOut(sb: SupabaseClient) {
   clearAppData()
-  const { error } = await sb.auth.signOut()
-  // Hors ligne, la révocation serveur échoue : on ferme au moins la session locale.
-  if (error) await sb.auth.signOut({ scope: 'local' })
+  await sb.auth.signOut({ scope: 'local' })
 }
 
 function Denied({ sb }: { sb: SupabaseClient }) {
@@ -31,7 +30,7 @@ function Denied({ sb }: { sb: SupabaseClient }) {
         <div className="screen">
           <p className="kicker">BOOTH CLOSED</p>
           <h1 className="h1 h1-form">No pass for this account</h1>
-          <p className="lead">This account isn’t on the guest list for Admit Two. Ask to be added, then sign in again.</p>
+          <p className="lead">This account can’t open Admit Two. Sign out, then sign in with a regular account.</p>
           <button type="button" className="primary" onClick={() => void signOut(sb)}>
             Sign out
           </button>

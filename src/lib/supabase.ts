@@ -17,9 +17,15 @@ function make(): SupabaseClient | null {
     return null
   }
   return createClient(url, key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: AUTH_STORAGE_KEY },
   })
 }
+
+/**
+ * Mealer est publié sur la même origine (garnier5.github.io) : sans clé propre, les deux apps
+ * partageraient la même session, et une déconnexion ici déconnecterait aussi Mealer.
+ */
+export const AUTH_STORAGE_KEY = 'admit-two-auth'
 
 /** null quand les clés manquent (mode `dev:offline`) : l'app tourne alors sur des données de démo locales. */
 export const supabase = make()

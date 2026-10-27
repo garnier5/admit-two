@@ -14,9 +14,9 @@ de Mealer) mais dans des tables à part, préfixées `admit_`.
 
 ## Mise en place
 
-1. **Base** : exécuter `supabase/001_admit_init.sql` dans Supabase › SQL Editor, puis la requête
-   commentée de la section 7 du fichier, avec les e-mails des deux comptes, pour les ajouter à
-   `admit_members`.
+1. **Base** : exécuter `supabase/001_admit_init.sql` dans Supabase › SQL Editor. Si une ancienne
+   version de ce script (option B) a déjà été exécutée, exécuter aussi
+   `supabase/002_admit_option_a.sql`.
 2. **Local** : `.env` (gitignoré) contient l'URL du projet et la clé **publishable**
    (`sb_publishable_…`), les mêmes que dans `Mealer-PWA/.env`. Lancer ensuite `npm install` et
    `npm run dev`.
@@ -38,10 +38,12 @@ de Mealer) mais dans des tables à part, préfixées `admit_`.
 
 - Le code et le dépôt ne contiennent que l'URL du projet et la clé publishable. L'app refuse de se
   connecter avec une clé qui ne commence pas par `sb_publishable_`, et le workflow échoue dans ce cas.
-- **Accès (option B)** : seuls les comptes listés dans `admit_members` voient et modifient les
-  données. Toutes les règles RLS passent par `admit_is_member()`, et la table `admit_members` est
-  illisible depuis l'app. Pour ouvrir l'app à tous les comptes du projet (option A), remplacer le
-  corps de `admit_is_member()` par `select public.is_member();`.
+- **Accès (option A, comme Mealer)** : tous les comptes du projet, connectés et non anonymes.
+  Toutes les règles RLS passent par `admit_is_member()`, qui appelle `public.is_member()` de Mealer
+  sans la modifier.
+- **Cohabitation avec Mealer** : les deux apps sont sur la même origine (`garnier5.github.io`).
+  Admit Two garde donc sa session sous sa propre clé (`admit-two-auth`), se déconnecte en portée
+  `local`, et « Reset this device » n'efface que ses propres données et caches.
 - Pas de suppression définitive : il n'y a ni `grant delete` ni règle `delete`, seulement la colonne
   `deleted`. Les colonnes `created_*` et `updated_*` sont posées par trigger, et les droits
   `insert` et `update` sont limités colonne par colonne.

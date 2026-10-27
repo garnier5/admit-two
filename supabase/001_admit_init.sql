@@ -5,35 +5,25 @@
 -- Tous les objets sont préfixés « admit_ ». Ce script ne lit, ne modifie
 -- et ne touche à aucun objet de Mealer (entries, entries_history,
 -- stamp_entry(), keep_entry_history(), leurs triggers et règles) ni à
--- public.is_member().
+-- public.is_member(), seulement appelée par admit_is_member().
 --
--- Accès : option B — seuls les comptes listés dans admit_members.
+-- Accès : option A — tous les comptes du projet (connectés et non anonymes), comme Mealer.
 -- Le script est ré-exécutable (if not exists / or replace / drop if exists).
 -- =====================================================================
 
 begin;
 
 -- ---------------------------------------------------------------------
--- 1. Membres (option B)
+-- 1. Accès (option A) : tous les comptes du projet, comme Mealer.
+--    public.is_member() est seulement appelée, jamais modifiée.
 -- ---------------------------------------------------------------------
-create table if not exists public.admit_members (
-  user_id uuid primary key references auth.users (id) on delete cascade
-);
-
-alter table public.admit_members enable row level security;
--- Aucune règle : illisible et non modifiable depuis l'app.
-revoke all on table public.admit_members from anon, authenticated;
-
 create or replace function public.admit_is_member()
 returns boolean
 language sql
 stable
-security definer
 set search_path = public
 as $$
-  select auth.uid() is not null
-     and coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false
-     and exists (select 1 from public.admit_members m where m.user_id = auth.uid());
+  select public.is_member();
 $$;
 
 revoke all on function public.admit_is_member() from public, anon;
@@ -235,14 +225,3 @@ end;
 $$;
 
 commit;
-
--- =====================================================================
--- 7. Donner l'accès (à faire à la main, après le script ci-dessus)
---    Remplace les e-mails par ceux des deux comptes, puis exécute :
--- =====================================================================
--- insert into public.admit_members (user_id)
--- select id from auth.users where email in ('toi@example.com', 'moi@example.com')
--- on conflict do nothing;
---
--- Vérifier :
--- select u.email from public.admit_members m join auth.users u on u.id = m.user_id;
