@@ -19,6 +19,9 @@ export interface Backend {
   load(): Promise<Snapshot>
   insertPlan(id: string, d: PlanDraft): Promise<Plan>
   setFait(id: string, fait: boolean): Promise<void>
+  updatePlan(id: string, d: PlanDraft): Promise<Plan>
+  /** Suppression douce (deleted = true côté Supabase). */
+  deletePlan(id: string): Promise<void>
   /** null : une catégorie du même nom existe déjà (il faut recharger). */
   insertCategory(id: string, label: string): Promise<Category | null>
   /** Renomme la catégorie et met à jour ses tickets ; fusionne si le nom existe déjà. */
@@ -62,6 +65,26 @@ export function remoteBackend(sb: SupabaseClient): Backend {
 
     async setFait(id, fait) {
       const { data, error } = await sb.from('admit_plans').update({ fait }).eq('id', id).select('id')
+      if (error) throw error
+      if (!Array.isArray(data) || data.length === 0) throw new Error('Ticket not found or not allowed')
+    },
+
+    async updatePlan(id, d) {
+      const { data, error } = await sb
+        .from('admit_plans')
+        .update({ titre: d.titre, prix: d.prix, duree: d.duree, saisons: d.saisons, lieu: d.lieu, cats: d.cats, fait: d.fait })
+        .eq('id', id)
+        .eq('deleted', false)
+        .select(PLAN_COLS)
+      if (error) throw error
+      const plan = Array.isArray(data) && data.length === 1 ? parsePlan(data[0]) : null
+      if (!plan) throw new Error('Ticket not found or not allowed')
+      return plan
+    },
+
+    // Suppression douce : la ligne reste (et son historique), masquée partout.
+    async deletePlan(id) {
+      const { data, error } = await sb.from('admit_plans').update({ deleted: true }).eq('id', id).select('id')
       if (error) throw error
       if (!Array.isArray(data) || data.length === 0) throw new Error('Ticket not found or not allowed')
     },
@@ -150,6 +173,20 @@ export function localBackend(): Backend {
     async setFait(id, fait) {
       const s = readDemo()
       save({ ...s, plans: s.plans.map((p) => (p.id === id ? { ...p, fait } : p)) })
+    },
+
+    async updatePlan(id, d) {
+      const s = readDemo()
+      const old = s.plans.find((p) => p.id === id)
+      if (!old) throw new Error('Ticket not found')
+      const plan: Plan = { ...old, ...d }
+      save({ ...s, plans: s.plans.map((p) => (p.id === id ? plan : p)) })
+      return plan
+    },
+
+    async deletePlan(id) {
+      const s = readDemo()
+      save({ ...s, plans: s.plans.filter((p) => p.id !== id) })
     },
 
     async insertCategory(id, label) {

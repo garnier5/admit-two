@@ -22,6 +22,7 @@ type Props = {
   setLF: (f: Filters) => void
   punchingId: string | null
   onPunch: (p: Plan) => void
+  onEdit: (p: Plan) => void
   online: boolean
   demo: boolean
   onSettings: () => void
@@ -95,6 +96,8 @@ export function TicketsScreen(p: Props) {
             plan={x}
             punch={p.punchingId === x.id ? (p.listTab === 'todo' ? 'leave' : 'knock') : null}
             onToggle={() => p.onPunch(x)}
+            // Pas d'édition tant que le ticket n'est pas enregistré (num null) ni pendant le poinçonnage.
+            onEdit={x.num !== null && p.punchingId !== x.id ? () => p.onEdit(x) : null}
           />
         ))}
         {visibles.length === 0 && <p className="empty">{p.loaded ? 'No tickets match.' : 'Loading tickets…'}</p>}

@@ -6,7 +6,7 @@ export function Stars() {
   return <span className="stars" aria-hidden="true">★★★</span>
 }
 
-export function TicketCard({ plan, punch, onToggle }: { plan: Plan; punch: Punch; onToggle: () => void }) {
+export function TicketCard({ plan, punch, onToggle, onEdit }: { plan: Plan; punch: Punch; onToggle: () => void; onEdit: (() => void) | null }) {
   const showMark = plan.fait || punch !== null
   const meta = [durationLabel(plan.duree), placeLabel(plan.lieu)].filter(Boolean).join(' · ') || '—'
   const stub = (plan.num ?? 0) % 3
@@ -16,7 +16,17 @@ export function TicketCard({ plan, punch, onToggle }: { plan: Plan; punch: Punch
         <p className="ticket-num">
           {ticketNum(plan.num)} · ADMIT TWO <Stars />
         </p>
-        <h2 className="ticket-title">{plan.titre}</h2>
+        <h2 className="ticket-title">
+          {onEdit ? (
+            // Toute la partie gauche du ticket est cliquable (::after), le talon reste le bouton de poinçonnage.
+            <button type="button" className="ticket-open" onClick={onEdit}>
+              <span className="sr-only">Edit </span>
+              {plan.titre}
+            </button>
+          ) : (
+            plan.titre
+          )}
+        </h2>
         <p className="ticket-meta">{meta}</p>
         <p className="ticket-sub">
           {seasonsLabel(plan.saisons) || 'Any season'} · {plan.cats.join(', ') || 'No category'}

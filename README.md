@@ -4,7 +4,9 @@ PWA autonome (React 19 + TypeScript + Vite 8) qui reprend le fonctionnement du s
 `standalone/Admit Two.html` :
 
 - **Tickets** (`#/tickets`) : liste des idées de sorties, onglets *To do / Punched / All*, panneau de
-  filtres (prix, durée, saison, lieu, catégories), poinçonnage animé du talon.
+  filtres (prix, durée, saison, lieu, catégories), poinçonnage animé du talon. Toucher le corps
+  d'un ticket ouvre le formulaire pré-rempli pour le **modifier** ou le **supprimer** (suppression
+  douce : `deleted = true`, la ligne et son historique restent en base).
 - **+ Issue** (`#/issue`) : nouveau ticket (destination, prix, durée, saisons, lieu, catégories
   personnalisables, « déjà poinçonné »).
 - **Raffle** (`#/raffle`) : choix des critères, tirage animé, ticket gagnant à poinçonner.

@@ -1,8 +1,12 @@
+import { useState } from 'react'
 import {
-  ALL_YEAR, DURATIONS, LIMITS, PLACES, PRICES, SEASONS, toggleIn,
+  ALL_YEAR, DURATIONS, LIMITS, PLACES, PRICES, SEASONS, ticketNum, toggleIn,
   type Category, type PlanDraft, type Season,
 } from '@/lib/model'
 import { PillGroup, type PillOpt } from './Pills'
+
+/** Présent : on modifie un ticket existant au lieu d'en créer un. */
+export type EditMode = { num: number | null; onCancel: () => void; onDelete: () => void }
 
 type Props = {
   draft: PlanDraft
@@ -12,9 +16,11 @@ type Props = {
   setNewCat: (v: string) => void
   onAddCat: () => void
   onSave: () => void
+  edit?: EditMode
 }
 
-export function IssueScreen({ draft, setDraft, cats, newCat, setNewCat, onAddCat, onSave }: Props) {
+export function IssueScreen({ draft, setDraft, cats, newCat, setNewCat, onAddCat, onSave, edit }: Props) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const pickOne = <K extends 'prix' | 'duree' | 'lieu'>(key: K, opts: readonly { v: NonNullable<PlanDraft[K]>; label: string }[]): PillOpt[] =>
     opts.map((o) => ({
       key: o.v,
@@ -58,9 +64,14 @@ export function IssueScreen({ draft, setDraft, cats, newCat, setNewCat, onAddCat
 
   return (
     <div className="screen form">
+      {edit && (
+        <button type="button" className="back-btn" onClick={edit.onCancel}>
+          ← TICKETS
+        </button>
+      )}
       <header>
-        <p className="kicker">ISSUE A TICKET</p>
-        <h1 className="h1 h1-form">New plan</h1>
+        <p className="kicker">{edit ? `${ticketNum(edit.num)} · EDIT TICKET` : 'ISSUE A TICKET'}</p>
+        <h1 className="h1 h1-form">{edit ? 'Edit plan' : 'New plan'}</h1>
       </header>
 
       <div className="field">
@@ -109,12 +120,36 @@ export function IssueScreen({ draft, setDraft, cats, newCat, setNewCat, onAddCat
 
       <label className="check">
         <input type="checkbox" checked={draft.fait} onChange={() => setDraft((d) => ({ ...d, fait: !d.fait }))} />
-        Already punched (we did it)
+        {edit ? 'Punched (we did it)' : 'Already punched (we did it)'}
       </label>
 
       <button type="button" className="primary" onClick={onSave} disabled={noTitre}>
-        Issue ticket
+        {edit ? 'Save changes' : 'Issue ticket'}
       </button>
+
+      {edit &&
+        (confirmDelete ? (
+          <div className="confirm-box" role="group" aria-label="Delete this ticket">
+            <p className="cat-note strong">Delete this ticket? It will disappear for both of you.</p>
+            <div className="cat-actions">
+              <button type="button" className="cat-btn danger" onClick={edit.onDelete}>
+                DELETE
+              </button>
+              <button type="button" className="cat-btn" onClick={() => setConfirmDelete(false)} autoFocus>
+                KEEP
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="form-links">
+            <button type="button" className="link-btn" onClick={edit.onCancel}>
+              CANCEL
+            </button>
+            <button type="button" className="link-btn" onClick={() => setConfirmDelete(true)}>
+              DELETE TICKET
+            </button>
+          </div>
+        ))}
     </div>
   )
 }

@@ -25,12 +25,18 @@ export function useData(backend: Backend, cacheKey: string | null) {
   const pendingCats = useRef(new Map<string, Category>())
   // Renommage (nouveau nom) ou suppression (null) de catégorie en cours, par id.
   const pendingCatChanges = useRef(new Map<string, string | null>())
+  // Modification (nouveaux champs) ou suppression (null) de ticket en cours, par id.
+  const pendingEdits = useRef(new Map<string, PlanDraft | null>())
 
   const overlay = useCallback((s: Snapshot): Snapshot => {
     const ids = new Set(s.plans.map((p) => p.id))
-    const plans = [...[...pendingPlans.current.values()].filter((p) => !ids.has(p.id)), ...s.plans].map((p) =>
-      pendingFait.current.has(p.id) ? { ...p, fait: pendingFait.current.get(p.id)! } : p,
-    )
+    const plans = [...[...pendingPlans.current.values()].filter((p) => !ids.has(p.id)), ...s.plans]
+      .filter((p) => pendingEdits.current.get(p.id) !== null)
+      .map((p) => {
+        const edit = pendingEdits.current.get(p.id)
+        const q = edit ? { ...p, ...edit } : p
+        return pendingFait.current.has(q.id) ? { ...q, fait: pendingFait.current.get(q.id)! } : q
+      })
     const catIds = new Set(s.cats.map((c) => c.id))
     const cats = [...s.cats, ...[...pendingCats.current.values()].filter((c) => !catIds.has(c.id))]
     let out: Snapshot = { plans: sortPlans(plans), cats }
@@ -38,7 +44,7 @@ export function useData(backend: Backend, cacheKey: string | null) {
     return out
   }, [])
 
-  // Dernier état affiché, pour annuler une modification de catégorie refusée.
+  // Dernier état affiché, pour annuler une modification refusée.
   const snapRef = useRef(snap)
   useEffect(() => {
     snapRef.current = snap
@@ -138,6 +144,44 @@ export function useData(backend: Backend, cacheKey: string | null) {
     [backend, overlay, reload],
   )
 
+  const editPlan = useCallback(
+    async (id: string, d: PlanDraft) => {
+      const before = snapRef.current?.plans.find((p) => p.id === id)
+      pendingEdits.current.set(id, d)
+      setSnap((s) => s && overlay(s))
+      try {
+        const saved = await backend.updatePlan(id, d)
+        pendingEdits.current.delete(id)
+        setSnap((s) => s && overlay({ ...s, plans: s.plans.map((p) => (p.id === id ? saved : p)) }))
+      } catch (e) {
+        console.warn('[admit] edit failed', e)
+        pendingEdits.current.delete(id)
+        if (before) setSnap((s) => s && overlay({ ...s, plans: s.plans.map((p) => (p.id === id ? before : p)) }))
+        setError(errMsg('save the changes'))
+      }
+    },
+    [backend, overlay],
+  )
+
+  const deletePlan = useCallback(
+    async (id: string) => {
+      const before = snapRef.current?.plans.find((p) => p.id === id)
+      pendingEdits.current.set(id, null)
+      setSnap((s) => s && overlay(s))
+      try {
+        await backend.deletePlan(id)
+        pendingEdits.current.delete(id)
+        setSnap((s) => s && overlay({ ...s, plans: s.plans.filter((p) => p.id !== id) }))
+      } catch (e) {
+        console.warn('[admit] delete failed', e)
+        pendingEdits.current.delete(id)
+        if (before) setSnap((s) => s && overlay({ ...s, plans: [before, ...s.plans.filter((p) => p.id !== id)] }))
+        setError(errMsg('delete the ticket'))
+      }
+    },
+    [backend, overlay],
+  )
+
   /** label : nouveau nom (fusion si déjà pris) ; null : suppression. */
   const changeCategory = useCallback(
     async (id: string, label: string | null) => {
@@ -174,6 +218,8 @@ export function useData(backend: Backend, cacheKey: string | null) {
     clearError,
     addPlan,
     setFait,
+    editPlan,
+    deletePlan,
     addCategory,
     renameCategory,
     deleteCategory,

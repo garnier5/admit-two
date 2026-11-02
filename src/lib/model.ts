@@ -151,3 +151,8 @@ export function applyCategoryChange<S extends { plans: Plan[]; cats: Category[] 
   })
   return { ...s, cats, plans }
 }
+
+/** Champs modifiables d'un ticket existant (pour pré-remplir le formulaire). */
+export const draftOf = (p: Plan): PlanDraft => ({
+  titre: p.titre, prix: p.prix, duree: p.duree, saisons: [...p.saisons], lieu: p.lieu, cats: [...p.cats], fait: p.fait,
+})

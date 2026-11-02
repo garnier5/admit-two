@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Backend } from '@/lib/backend'
 import {
-  cleanLabel, emptyDraft, emptyFilters, findCategory, LIMITS, matchFilters, replaceLabel,
+  cleanLabel, draftOf, emptyDraft, emptyFilters, findCategory, LIMITS, matchFilters, replaceLabel,
   type Filters, type Plan, type PlanDraft,
 } from '@/lib/model'
 import { useData } from '@/hooks/useData'
@@ -45,6 +45,10 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
   const [draft, setDraft] = useState<PlanDraft>(emptyDraft)
   const [newCat, setNewCat] = useState('')
 
+  // Modification d'un ticket existant (affichée dans l'onglet Tickets)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<PlanDraft>(emptyDraft)
+
   // Tirage
   const [raffle, setRaffle] = useState<RaffleScreen>('filters')
   const [f, setF] = useState<Filters>(emptyFilters)
@@ -79,7 +83,14 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
     setLF(prune)
     setF(prune)
     setDraft(prune)
+    setEditDraft(prune)
   }, [knownCats, loaded])
+
+  // Ticket en cours de modification supprimé entre-temps (par l'autre personne) : on ferme le formulaire.
+  const editing = editId === null ? null : (plans.find((p) => p.id === editId) ?? null)
+  useEffect(() => {
+    if (loaded && editId !== null && !editing) setEditId(null)
+  }, [loaded, editId, editing])
 
   const renameCat = (id: string, label: string) => {
     const cat = cats.find((c) => c.id === id)
@@ -92,6 +103,7 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
     setLF(follow)
     setF(follow)
     setDraft(follow)
+    setEditDraft(follow)
     void data.renameCategory(id, label)
   }
 
@@ -99,6 +111,7 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
   const result = plans.find((p) => p.id === tirageId) ?? null
 
   const go = (t: Tab) => {
+    setEditId(null)
     if (t === 'raffle') setRaffle((r) => (r === 'drawing' ? r : 'filters'))
     setTab(t)
   }
@@ -115,24 +128,49 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
     }, delay)
   }
 
-  const addCat = () => {
+  const addCatTo = (set: Dispatch<SetStateAction<PlanDraft>>) => () => {
     const name = cleanLabel(newCat).slice(0, LIMITS.category).trim()
     if (!name) return
-    const found = cats.find((c) => c.label.toLowerCase() === name.toLowerCase())
+    const found = findCategory(cats, name)
     const label = found ? found.label : name
     if (!found) void data.addCategory(name)
-    setDraft((d) =>
+    set((d) =>
       d.cats.includes(label) || d.cats.length >= LIMITS.catsPerPlan ? d : { ...d, cats: [...d.cats, label] },
     )
     setNewCat('')
   }
 
+  /** Titre nettoyé et catégories encore connues (l'autre personne a pu en changer) ; null si pas de titre. */
+  const finalize = (d: PlanDraft): PlanDraft | null => {
+    const titre = cleanLabel(d.titre).slice(0, LIMITS.title).trim()
+    return titre ? { ...d, titre, cats: d.cats.filter((c) => knownCats.has(c)) } : null
+  }
+
+  const openEdit = (p: Plan) => {
+    setEditId(p.id)
+    setEditDraft(draftOf(p))
+    setNewCat('')
+  }
+
+  const saveEdit = () => {
+    const d = finalize(editDraft)
+    if (!d || editId === null) return
+    void data.editPlan(editId, d)
+    setEditId(null)
+    setNewCat('')
+  }
+
+  const deleteEdit = () => {
+    if (editId === null) return
+    void data.deletePlan(editId)
+    setEditId(null)
+    setNewCat('')
+  }
+
   const savePlan = () => {
-    const titre = cleanLabel(draft.titre).slice(0, LIMITS.title).trim()
-    if (!titre) return
-    // Ne garder que des catégories encore connues (l'autre personne a pu en changer).
-    const known = new Set(cats.map((c) => c.label))
-    void data.addPlan({ ...draft, titre, cats: draft.cats.filter((c) => known.has(c)) })
+    const d = finalize(draft)
+    if (!d) return
+    void data.addPlan(d)
     setDraft(emptyDraft())
     setNewCat('')
     setListTab(draft.fait ? 'done' : 'todo')
@@ -165,7 +203,20 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
   }
 
   let screen
-  if (tab === 'tickets') {
+  if (tab === 'tickets' && editing) {
+    screen = (
+      <IssueScreen
+        draft={editDraft}
+        setDraft={setEditDraft}
+        cats={cats}
+        newCat={newCat}
+        setNewCat={setNewCat}
+        onAddCat={addCatTo(setEditDraft)}
+        onSave={saveEdit}
+        edit={{ num: editing.num, onCancel: () => setEditId(null), onDelete: deleteEdit }}
+      />
+    )
+  } else if (tab === 'tickets') {
     screen = (
       <TicketsScreen
         plans={plans}
@@ -179,6 +230,7 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
         setLF={setLF}
         punchingId={punchingId}
         onPunch={punch}
+        onEdit={openEdit}
         online={online}
         demo={backend.mode === 'local'}
         onSettings={() => go('settings')}
@@ -205,7 +257,7 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
         cats={cats}
         newCat={newCat}
         setNewCat={setNewCat}
-        onAddCat={addCat}
+        onAddCat={addCatTo(setDraft)}
         onSave={savePlan}
       />
     )
@@ -241,7 +293,7 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
 
   return (
     <div className="app">
-      <main className="scroll" key={tab}>
+      <main className="scroll" key={editing ? 'edit:' + editing.id : tab}>
         {screen}
       </main>
       {data.error && (
