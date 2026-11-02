@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Backend } from '@/lib/backend'
-import { cleanLabel, emptyDraft, emptyFilters, LIMITS, matchFilters, type Filters, type Plan, type PlanDraft } from '@/lib/model'
+import {
+  cleanLabel, emptyDraft, emptyFilters, findCategory, LIMITS, matchFilters, replaceLabel,
+  type Filters, type Plan, type PlanDraft,
+} from '@/lib/model'
 import { useData } from '@/hooks/useData'
 import { useHashTab, type Tab } from '@/hooks/useHashTab'
 import { TicketsScreen, type ListTab } from './TicketsScreen'
 import { IssueScreen } from './IssueScreen'
 import { Drawing, RaffleFilters, Result } from './RaffleScreens'
+import { SettingsScreen } from './SettingsScreen'
 
 type RaffleScreen = 'filters' | 'drawing' | 'result'
 
@@ -63,6 +67,33 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
     const t = window.setTimeout(clearError, 5000)
     return () => clearTimeout(t)
   }, [error, clearError])
+
+  // Une catégorie supprimée ou renommée (ici ou par l'autre personne) ne doit pas rester
+  // dans les filtres ni dans le brouillon : un filtre invisible masquerait tous les tickets.
+  const loaded = data.loaded
+  const knownCats = useMemo(() => new Set(cats.map((c) => c.label)), [cats])
+  useEffect(() => {
+    if (!loaded) return
+    const prune = <T extends { cats: string[] }>(x: T): T =>
+      x.cats.every((c) => knownCats.has(c)) ? x : { ...x, cats: x.cats.filter((c) => knownCats.has(c)) }
+    setLF(prune)
+    setF(prune)
+    setDraft(prune)
+  }, [knownCats, loaded])
+
+  const renameCat = (id: string, label: string) => {
+    const cat = cats.find((c) => c.id === id)
+    if (!cat) return
+    const next = findCategory(cats, label, id)?.label ?? label
+    const follow = <T extends { cats: string[] }>(x: T): T => {
+      const c = replaceLabel(x.cats, cat.label, next)
+      return c === x.cats ? x : { ...x, cats: c }
+    }
+    setLF(follow)
+    setF(follow)
+    setDraft(follow)
+    void data.renameCategory(id, label)
+  }
 
   const pool = plans.filter((p) => matchFilters(p, f) && (inclureFaits || !p.fait))
   const result = plans.find((p) => p.id === tirageId) ?? null
@@ -150,6 +181,19 @@ export function Main({ backend, cacheKey, onSignOut }: { backend: Backend; cache
         onPunch={punch}
         online={online}
         demo={backend.mode === 'local'}
+        onSettings={() => go('settings')}
+      />
+    )
+  } else if (tab === 'settings') {
+    screen = (
+      <SettingsScreen
+        cats={cats}
+        plans={plans}
+        loaded={data.loaded}
+        demo={backend.mode === 'local'}
+        onAdd={(label) => void data.addCategory(label)}
+        onRename={renameCat}
+        onDelete={(id) => void data.deleteCategory(id)}
         onSignOut={onSignOut}
       />
     )

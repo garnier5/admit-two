@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export const TABS = ['tickets', 'issue', 'raffle'] as const
+export const TABS = ['tickets', 'issue', 'raffle', 'settings'] as const
 export type Tab = (typeof TABS)[number]
 
 function fromHash(): Tab {
@@ -8,7 +8,7 @@ function fromHash(): Tab {
   return m && (TABS as readonly string[]).includes(m[1]) ? (m[1] as Tab) : 'tickets'
 }
 
-/** Onglet courant reflété dans le hash `#/tickets`, `#/issue`, `#/raffle`. */
+/** Onglet courant reflété dans le hash `#/tickets`, `#/issue`, `#/raffle`, `#/settings`. */
 export function useHashTab(): [Tab, (t: Tab) => void] {
   const [tab, setTabState] = useState<Tab>(fromHash)
 

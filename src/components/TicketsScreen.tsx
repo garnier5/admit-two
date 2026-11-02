@@ -1,4 +1,4 @@
-import { LogOut, WifiOff } from 'lucide-react'
+import { Settings, WifiOff } from 'lucide-react'
 import { countFilters, emptyFilters, matchFilters, type Category, type Filters, type Plan } from '@/lib/model'
 import { FilterGroups, Pill } from './Pills'
 import { TicketCard } from './TicketCard'
@@ -24,7 +24,7 @@ type Props = {
   onPunch: (p: Plan) => void
   online: boolean
   demo: boolean
-  onSignOut: (() => void) | null
+  onSettings: () => void
 }
 
 export function TicketsScreen(p: Props) {
@@ -48,11 +48,9 @@ export function TicketsScreen(p: Props) {
                 <WifiOff size={14} aria-hidden="true" /> OFFLINE
               </span>
             )}
-            {p.onSignOut && (
-              <button type="button" className="icon-btn" onClick={p.onSignOut} aria-label="Sign out" title="Sign out">
-                <LogOut size={20} aria-hidden="true" />
-              </button>
-            )}
+            <button type="button" className="icon-btn" onClick={p.onSettings} aria-label="Settings" title="Settings">
+              <Settings size={20} aria-hidden="true" />
+            </button>
           </div>
         </div>
         <h1 className="h1">

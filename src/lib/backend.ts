@@ -2,7 +2,7 @@
 // - remote : tables admit_* du projet Supabase (RLS, temps réel) ;
 // - local  : données de démo dans ce navigateur (mode `dev:offline`, aucune requête réseau).
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Category, Plan, PlanDraft } from './model'
+import { applyCategoryChange, type Category, type Plan, type PlanDraft } from './model'
 import { parseCategory, parseList, parsePlan } from './validate'
 import { readJSON, writeJSON } from './storage'
 import { seedCategories, seedPlans } from './seed'
@@ -21,6 +21,10 @@ export interface Backend {
   setFait(id: string, fait: boolean): Promise<void>
   /** null : une catégorie du même nom existe déjà (il faut recharger). */
   insertCategory(id: string, label: string): Promise<Category | null>
+  /** Renomme la catégorie et met à jour ses tickets ; fusionne si le nom existe déjà. */
+  renameCategory(id: string, label: string): Promise<void>
+  /** Supprime la catégorie et la retire de ses tickets. */
+  deleteCategory(id: string): Promise<void>
   subscribe(onChange: (c: Change) => void): () => void
 }
 
@@ -71,6 +75,17 @@ export function remoteBackend(sb: SupabaseClient): Backend {
       const cat = parseCategory(data)
       if (!cat) throw new Error('Server returned an invalid category')
       return cat
+    },
+
+    // Fonctions SQL de supabase/003_admit_categories_admin.sql : catégorie et tickets en une seule transaction.
+    async renameCategory(id, label) {
+      const { error } = await sb.rpc('admit_rename_category', { p_id: id, p_label: label })
+      if (error) throw error
+    },
+
+    async deleteCategory(id) {
+      const { error } = await sb.rpc('admit_delete_category', { p_id: id })
+      if (error) throw error
     },
 
     subscribe(onChange) {
@@ -143,6 +158,14 @@ export function localBackend(): Backend {
       const cat = { id, label }
       save({ ...s, cats: [...s.cats, cat] })
       return cat
+    },
+
+    async renameCategory(id, label) {
+      save(applyCategoryChange(readDemo(), id, label))
+    },
+
+    async deleteCategory(id) {
+      save(applyCategoryChange(readDemo(), id, null))
     },
 
     subscribe(onChange) {

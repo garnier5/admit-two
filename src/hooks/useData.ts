@@ -1,7 +1,7 @@
 // État partagé des tickets et catégories : cache local, écritures optimistes, temps réel.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Backend, Snapshot } from '@/lib/backend'
-import { sortPlans, type Category, type Plan, type PlanDraft } from '@/lib/model'
+import { applyCategoryChange, sortPlans, type Category, type Plan, type PlanDraft } from '@/lib/model'
 import { readJSON, writeJSON } from '@/lib/storage'
 import { parseCategory, parseList, parsePlan } from '@/lib/validate'
 
@@ -23,6 +23,8 @@ export function useData(backend: Backend, cacheKey: string | null) {
   const pendingPlans = useRef(new Map<string, Plan>())
   const pendingFait = useRef(new Map<string, boolean>())
   const pendingCats = useRef(new Map<string, Category>())
+  // Renommage (nouveau nom) ou suppression (null) de catégorie en cours, par id.
+  const pendingCatChanges = useRef(new Map<string, string | null>())
 
   const overlay = useCallback((s: Snapshot): Snapshot => {
     const ids = new Set(s.plans.map((p) => p.id))
@@ -31,8 +33,16 @@ export function useData(backend: Backend, cacheKey: string | null) {
     )
     const catIds = new Set(s.cats.map((c) => c.id))
     const cats = [...s.cats, ...[...pendingCats.current.values()].filter((c) => !catIds.has(c.id))]
-    return { plans: sortPlans(plans), cats }
+    let out: Snapshot = { plans: sortPlans(plans), cats }
+    for (const [id, label] of pendingCatChanges.current) out = applyCategoryChange(out, id, label)
+    return out
   }, [])
+
+  // Dernier état affiché, pour annuler une modification de catégorie refusée.
+  const snapRef = useRef(snap)
+  useEffect(() => {
+    snapRef.current = snap
+  }, [snap])
 
   const reload = useCallback(async () => {
     try {
@@ -128,6 +138,32 @@ export function useData(backend: Backend, cacheKey: string | null) {
     [backend, overlay, reload],
   )
 
+  /** label : nouveau nom (fusion si déjà pris) ; null : suppression. */
+  const changeCategory = useCallback(
+    async (id: string, label: string | null) => {
+      const before = snapRef.current
+      pendingCatChanges.current.set(id, label)
+      setSnap((s) => s && overlay(s))
+      try {
+        if (label === null) await backend.deleteCategory(id)
+        else await backend.renameCategory(id, label)
+        pendingCatChanges.current.delete(id)
+      } catch (e) {
+        console.warn('[admit] category change failed', e)
+        pendingCatChanges.current.delete(id)
+        if (before) setSnap(overlay(before))
+        await reload()
+        setError(errMsg(label === null ? 'delete the category' : 'rename the category'))
+        return
+      }
+      await reload()
+    },
+    [backend, overlay, reload],
+  )
+
+  const renameCategory = useCallback((id: string, label: string) => changeCategory(id, label), [changeCategory])
+  const deleteCategory = useCallback((id: string) => changeCategory(id, null), [changeCategory])
+
   const clearError = useCallback(() => setError(null), [])
 
   return {
@@ -139,5 +175,7 @@ export function useData(backend: Backend, cacheKey: string | null) {
     addPlan,
     setFait,
     addCategory,
+    renameCategory,
+    deleteCategory,
   }
 }

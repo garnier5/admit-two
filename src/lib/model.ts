@@ -114,3 +114,40 @@ export const sortPlans = (plans: Plan[]) =>
 
 /** Nettoie une étiquette saisie, comme l'exige le check SQL (pas d'espaces en bord). */
 export const cleanLabel = (s: string) => s.replace(/\s+/g, ' ').trim()
+
+const sameLabel = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+
+/** La catégorie active (autre que `exceptId`) qui porte déjà ce nom, à la casse près. */
+export const findCategory = (cats: Category[], label: string, exceptId?: string) =>
+  cats.find((c) => c.id !== exceptId && sameLabel(c.label, label)) ?? null
+
+/**
+ * Remplace `old` par `next` dans une liste d'étiquettes (null : retire), sans doublon et dans le même ordre.
+ * Même logique que admit_replace_label() côté SQL.
+ */
+export function replaceLabel(arr: string[], old: string, next: string | null): string[] {
+  if (!arr.some((x) => sameLabel(x, old))) return arr
+  const out: string[] = []
+  for (const x of arr) {
+    const v = sameLabel(x, old) ? next : x
+    if (v !== null && !out.some((y) => sameLabel(y, v))) out.push(v)
+  }
+  return out
+}
+
+/**
+ * Renomme (`label`) ou supprime (`null`) une catégorie et met à jour les tickets qui la portent.
+ * Renommer vers le nom d'une autre catégorie les fusionne. Sans effet si la catégorie n'existe plus.
+ */
+export function applyCategoryChange<S extends { plans: Plan[]; cats: Category[] }>(s: S, id: string, label: string | null): S {
+  const cat = s.cats.find((c) => c.id === id)
+  if (!cat) return s
+  const target = label === null ? null : findCategory(s.cats, label, id)
+  const next = label === null ? null : (target?.label ?? label)
+  const cats = next === null || target ? s.cats.filter((c) => c.id !== id) : s.cats.map((c) => (c.id === id ? { ...c, label: next } : c))
+  const plans = s.plans.map((p) => {
+    const pc = replaceLabel(p.cats, cat.label, next)
+    return pc === p.cats ? p : { ...p, cats: pc }
+  })
+  return { ...s, cats, plans }
+}
